@@ -16,7 +16,7 @@
  * @{
  *
  * @file       systemmod.c
- * @author     The LibrePilot Project, http://www.librepilot.org Copyright (C) 2015.
+ * @author     The LibrePilot Project, http://www.librepilot.org Copyright (C) 2015-2016.
  *             The OpenPilot Team, http://www.openpilot.org Copyright (C) 2010-2015.
  * @brief      System module
  *
@@ -62,7 +62,7 @@
 #include <pios_notify.h>
 #include <pios_task_monitor.h>
 #include <pios_board_init.h>
-
+#include <pios_board_io.h>
 
 #ifdef PIOS_INCLUDE_INSTRUMENTATION
 #include <instrumentation.h>
@@ -118,9 +118,21 @@ static void callbackSchedulerForEachCallback(int16_t callback_id, const struct p
 static void updateStats();
 static void updateSystemAlarms();
 static void systemTask(void *parameters);
-#ifdef DIAG_I2C_WDG_STATS
 static void updateI2Cstats();
+#ifdef DIAG_I2C_WDG_STATS
 static void updateWDGstats();
+#endif
+
+#ifdef PIOS_INCLUDE_I2C
+#define I2C_ERROR_ACTIVITY_TIMEOUT_SECONDS 2
+#define I2C_ERROR_ACTIVITY_TIMEOUT         (I2C_ERROR_ACTIVITY_TIMEOUT_SECONDS * 1000 / SYSTEM_UPDATE_PERIOD_MS)
+static uint8_t i2c_error_activity[PIOS_I2C_ERROR_COUNT_NUMELEM];
+#endif
+
+#ifdef PIOS_INCLUDE_RFM22B
+static uint8_t previousRFXtalCap;
+static uint8_t protocol;
+static void oplinkSettingsUpdatedCb(UAVObjEvent *ev);
 #endif
 
 extern uintptr_t pios_uavo_settings_fs_id;
@@ -148,7 +160,6 @@ int32_t SystemModStart(void)
 int32_t SystemModInitialize(void)
 {
     // Must registers objects here for system thread because ObjectManager started in OpenPilotInit
-    SystemSettingsInitialize();
     SystemStatsInitialize();
     FlightStatusInitialize();
     ObjectPersistenceInitialize();
@@ -225,19 +236,32 @@ static void systemTask(__attribute__((unused)) void *parameters)
     HwSettingsConnectCallback(checkSettingsUpdatedCb);
     SystemSettingsConnectCallback(checkSettingsUpdatedCb);
 
+#ifdef PIOS_INCLUDE_RFM22B
+    // Initialize previousRFXtalCap used by callback
+    OPLinkSettingsRFXtalCapGet(&previousRFXtalCap);
+    OPLinkSettingsConnectCallback(oplinkSettingsUpdatedCb);
+    // Get protocol
+    OPLinkSettingsProtocolGet(&protocol);
+#endif
+
 #ifdef DIAG_TASKS
     TaskInfoData taskInfoData;
+    memset(&taskInfoData, 0, sizeof(TaskInfoData));
     CallbackInfoData callbackInfoData;
+    memset(&callbackInfoData, 0, sizeof(CallbackInfoData));
 #endif
     // Main system loop
     while (1) {
         NotificationUpdateStatus();
         // Update the system statistics
         updateStats();
+
+        // Update I2C stats
+        updateI2Cstats();
+
         // Update the system alarms
         updateSystemAlarms();
 #ifdef DIAG_I2C_WDG_STATS
-        updateI2Cstats();
         updateWDGstats();
 #endif
 
@@ -250,13 +274,9 @@ static void systemTask(__attribute__((unused)) void *parameters)
         PIOS_TASK_MONITOR_ForEachTask(taskMonitorForEachCallback, &taskInfoData);
         TaskInfoSet(&taskInfoData);
         // Update the callback status object
-// if(FALSE){
         PIOS_CALLBACKSCHEDULER_ForEachCallback(callbackSchedulerForEachCallback, &callbackInfoData);
         CallbackInfoSet(&callbackInfoData);
-// }
 #endif
-// }
-
 
         UAVObjEvent ev;
         int delayTime = SYSTEM_UPDATE_PERIOD_MS;
@@ -269,9 +289,6 @@ static void systemTask(__attribute__((unused)) void *parameters)
         oplinkStatus.HeapRemaining = xPortGetFreeHeapSize();
 
         if (pios_rfm22b_id) {
-            // Get the other device stats.
-            PIOS_RFM22B_GetPairStats(pios_rfm22b_id, oplinkStatus.PairIDs, oplinkStatus.PairSignalStrengths, OPLINKSTATUS_PAIRIDS_NUMELEM);
-
             // Get the stats from the radio device
             struct rfm22b_stats radio_stats;
             PIOS_RFM22B_GetStats(pios_rfm22b_id, &radio_stats);
@@ -283,18 +300,19 @@ static void systemTask(__attribute__((unused)) void *parameters)
             static uint16_t prev_tx_seq   = 0;
             static uint16_t prev_rx_seq   = 0;
 
-            oplinkStatus.DeviceID    = PIOS_RFM22B_DeviceID(pios_rfm22b_id);
-            oplinkStatus.RxGood      = radio_stats.rx_good;
-            oplinkStatus.RxCorrected = radio_stats.rx_corrected;
-            oplinkStatus.RxErrors    = radio_stats.rx_error;
-            oplinkStatus.RxMissed    = radio_stats.rx_missed;
-            oplinkStatus.RxFailure   = radio_stats.rx_failure;
-            oplinkStatus.TxDropped   = radio_stats.tx_dropped;
-            oplinkStatus.TxFailure   = radio_stats.tx_failure;
-            oplinkStatus.Resets      = radio_stats.resets;
-            oplinkStatus.Timeouts    = radio_stats.timeouts;
+            oplinkStatus.DeviceID      = PIOS_RFM22B_DeviceID(pios_rfm22b_id);
+            oplinkStatus.RxGood        = radio_stats.rx_good;
+            oplinkStatus.RxCorrected   = radio_stats.rx_corrected;
+            oplinkStatus.RxErrors      = radio_stats.rx_error;
+            oplinkStatus.RxMissed      = radio_stats.rx_missed;
+            oplinkStatus.RxFailure     = radio_stats.rx_failure;
+            oplinkStatus.TxDropped     = radio_stats.tx_dropped;
+            oplinkStatus.TxFailure     = radio_stats.tx_failure;
+            oplinkStatus.Resets        = radio_stats.resets;
+            oplinkStatus.Timeouts      = radio_stats.timeouts;
             oplinkStatus.RSSI = radio_stats.rssi;
-            oplinkStatus.LinkQuality = radio_stats.link_quality;
+            oplinkStatus.LinkQuality   = radio_stats.link_quality;
+            oplinkStatus.AFCCorrection = radio_stats.afc_correction;
             if (first_time) {
                 first_time = false;
             } else {
@@ -317,7 +335,7 @@ static void systemTask(__attribute__((unused)) void *parameters)
             oplinkStatus.RXSeq     = radio_stats.rx_seq;
 
             oplinkStatus.LinkState = radio_stats.link_state;
-        } else {
+        } else if (protocol != OPLINKSETTINGS_PROTOCOL_OPENLRS) {
             oplinkStatus.LinkState = OPLINKSTATUS_LINKSTATE_DISABLED;
         }
         OPLinkStatusSet(&oplinkStatus);
@@ -444,6 +462,25 @@ static void checkSettingsUpdatedCb(__attribute__((unused)) UAVObjEvent *ev)
     }
 }
 
+#ifdef PIOS_INCLUDE_RFM22B
+/**
+ * Called whenever OPLink settings changed
+ */
+static void oplinkSettingsUpdatedCb(__attribute__((unused)) UAVObjEvent *ev)
+{
+    uint8_t currentRFXtalCap;
+
+    OPLinkSettingsRFXtalCapGet(&currentRFXtalCap);
+
+    // Check if RFXtalCap value changed
+    if (currentRFXtalCap != previousRFXtalCap) {
+        PIOS_RFM22B_SetXtalCap(pios_rfm22b_id, currentRFXtalCap);
+        PIOS_RFM22B_Reinit(pios_rfm22b_id);
+        previousRFXtalCap = currentRFXtalCap;
+    }
+}
+#endif /* ifdef PIOS_INCLUDE_RFM22B */
+
 #ifdef DIAG_TASKS
 static void taskMonitorForEachCallback(uint16_t task_id, const struct pios_task_info *task_info, void *context)
 {
@@ -480,17 +517,36 @@ static void callbackSchedulerForEachCallback(int16_t callback_id, const struct p
 #endif /* ifdef DIAG_TASKS */
 
 /**
- * Called periodically to update the I2C statistics
+ * Called periodically (every SYSTEM_UPDATE_PERIOD_MS milliseconds) to update the I2C statistics
  */
-#ifdef DIAG_I2C_WDG_STATS
 static void updateI2Cstats()
 {
 #if defined(PIOS_INCLUDE_I2C)
+    static uint8_t previous_error_counts[PIOS_I2C_ERROR_COUNT_NUMELEM];
+
+    struct pios_i2c_fault_history history;
+    uint8_t error_counts[PIOS_I2C_ERROR_COUNT_NUMELEM];
+
+    PIOS_I2C_GetDiagnostics(&history, error_counts);
+
+    // every time a counter changes, set activity timeout counter to ( I2C_ERROR_ACTIVITY_TIMEOUT ).
+    // every time a counter does not change, decrease activity counter.
+
+    for (uint8_t i = 0; i < PIOS_I2C_ERROR_COUNT_NUMELEM; i++) {
+        if (error_counts[i] != previous_error_counts[i]) {
+            i2c_error_activity[i] = I2C_ERROR_ACTIVITY_TIMEOUT;
+        } else if (i2c_error_activity[i] > 0) {
+            i2c_error_activity[i]--;
+        }
+
+        previous_error_counts[i] = error_counts[i];
+    }
+
+#ifdef DIAG_I2C_WDG_STATS
     I2CStatsData i2cStats;
     I2CStatsGet(&i2cStats);
 
-    struct pios_i2c_fault_history history;
-    PIOS_I2C_GetDiagnostics(&history, &i2cStats.event_errors);
+    memcpy(&i2cStats.event_errors, &error_counts, sizeof(error_counts));
 
     for (uint8_t i = 0; (i < I2C_LOG_DEPTH) && (i < I2CSTATS_EVENT_LOG_NUMELEM); i++) {
         i2cStats.evirq_log[i] = history.evirq[i];
@@ -500,9 +556,11 @@ static void updateI2Cstats()
     }
     i2cStats.last_error_type = history.type;
     I2CStatsSet(&i2cStats);
-#endif
+#endif /* DIAG_I2C_WDG_STATS */
+#endif /* PIOS_INCLUDE_I2C */
 }
 
+#ifdef DIAG_I2C_WDG_STATS
 static void updateWDGstats()
 {
     WatchdogStatusData watchdogStatus;
@@ -523,7 +581,11 @@ static uint16_t GetFreeIrqStackSize(void)
 #if !defined(ARCH_POSIX) && !defined(ARCH_WIN32) && defined(CHECK_IRQ_STACK)
     extern uint32_t _irq_stack_top;
     extern uint32_t _irq_stack_end;
-    uint32_t pattern    = 0x0000A5A5;
+#ifdef STM32F3
+    uint32_t pattern    = 0xA5A5A5A5;
+#else
+    uint32_t pattern    = 0xA5A5;
+#endif
     uint32_t *ptr       = &_irq_stack_end;
 
 #if 1 /* the ugly way accurate but takes more time, useful for debugging */
@@ -663,6 +725,28 @@ static void updateSystemAlarms()
         sysStats.ObjectManagerQueueID    = objStats.lastQueueErrorID;
         SystemStatsSet(&sysStats);
     }
+
+#ifdef PIOS_INCLUDE_I2C
+    if (AlarmsGet(SYSTEMALARMS_ALARM_I2C) != SYSTEMALARMS_ALARM_UNINITIALISED) {
+        static const SystemAlarmsAlarmOptions i2c_alarm_by_error[] = {
+            [PIOS_I2C_BAD_EVENT_COUNTER] = SYSTEMALARMS_ALARM_ERROR,
+            [PIOS_I2C_FSM_FAULT_COUNT]   = SYSTEMALARMS_ALARM_ERROR,
+            [PIOS_I2C_ERROR_INTERRUPT_COUNTER] = SYSTEMALARMS_ALARM_ERROR,
+            [PIOS_I2C_NACK_COUNTER] = SYSTEMALARMS_ALARM_CRITICAL,
+            [PIOS_I2C_TIMEOUT_COUNTER]   = SYSTEMALARMS_ALARM_ERROR,
+        };
+
+        SystemAlarmsAlarmOptions i2c_alarm = SYSTEMALARMS_ALARM_OK;
+
+        for (uint8_t i = 0; i < PIOS_I2C_ERROR_COUNT_NUMELEM; i++) {
+            if ((i2c_error_activity[i] > 0) && (i2c_alarm < i2c_alarm_by_error[i])) {
+                i2c_alarm = i2c_alarm_by_error[i];
+            }
+        }
+
+        AlarmsSet(SYSTEMALARMS_ALARM_I2C, i2c_alarm);
+    }
+#endif /* PIOS_INCLUDE_I2C */
 }
 
 /**

@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
  *
- * @file       ConfigRevoWidget.h
+ * @file       configrevowidget.cpp
  * @author     The LibrePilot Project, http://www.librepilot.org Copyright (C) 2016.
  *             The OpenPilot Team, http://www.openpilot.org Copyright (C) 2010.
  * @addtogroup GCSPlugins GCS Plugins
@@ -29,7 +29,9 @@
 
 #include "ui_revosensors.h"
 
+#include <uavobjectmanager.h>
 #include <uavobjecthelper.h>
+
 #include <attitudestate.h>
 #include <attitudesettings.h>
 #include <revocalibration.h>
@@ -38,29 +40,17 @@
 #include <accelstate.h>
 #include <magstate.h>
 
-#include <extensionsystem/pluginmanager.h>
-#include <coreplugin/generalsettings.h>
-
 #include "assertions.h"
 #include "calibration.h"
 #include "calibration/calibrationutils.h"
 
-#include "math.h"
-#include <QDebug>
-#include <QTimer>
-#include <QStringList>
-#include <QWidget>
-#include <QTextEdit>
-#include <QVBoxLayout>
-#include <QPushButton>
-#include <QMessageBox>
-#include <QThread>
-#include <QErrorMessage>
-#include <QDesktopServices>
-#include <QUrl>
+#include <math.h>
 #include <iostream>
 
-#include <math.h>
+#include <QDebug>
+#include <QStringList>
+#include <QWidget>
+#include <QThread>
 
 // #define DEBUG
 
@@ -78,20 +68,16 @@ public:
 };
 
 ConfigRevoWidget::ConfigRevoWidget(QWidget *parent) :
-    ConfigTaskWidget(parent),
-    m_ui(new Ui_RevoSensorsWidget()),
-    isBoardRotationStored(false)
+    ConfigTaskWidget(parent), isBoardRotationStored(false)
 {
+    m_ui = new Ui_RevoSensorsWidget();
     m_ui->setupUi(this);
     m_ui->tabWidget->setCurrentIndex(0);
 
-    addApplySaveButtons(m_ui->revoCalSettingsSaveRAM, m_ui->revoCalSettingsSaveSD);
+    // must be done before auto binding !
+    setWikiURL("Revo+Attitude+Configuration");
 
-    ExtensionSystem::PluginManager *pm = ExtensionSystem::PluginManager::instance();
-    Core::Internal::GeneralSettings *settings = pm->getObject<Core::Internal::GeneralSettings>();
-    if (!settings->useExpertMode()) {
-        m_ui->revoCalSettingsSaveRAM->setVisible(false);
-    }
+    addAutoBindings();
 
     // Initialization of the visual help
     m_ui->calibrationVisualHelp->setScene(new QGraphicsScene(this));
@@ -108,7 +94,6 @@ ConfigRevoWidget::ConfigRevoWidget(QWidget *parent) :
     addUAVObject("RevoSettings");
     addUAVObject("AccelGyroSettings");
     addUAVObject("AuxMagSettings");
-    autoLoadWidgets();
 
     // accel calibration
     m_accelCalibrationModel = new OpenPilot::SixPointCalibrationModel(this);
@@ -223,16 +208,7 @@ ConfigRevoWidget::ConfigRevoWidget(QWidget *parent) :
 
     displayMagError = false;
 
-    // Connect the help button
-    connect(m_ui->attitudeHelp, SIGNAL(clicked()), this, SLOT(openHelp()));
-
-    populateWidgets();
     enableAllCalibrations();
-
-    updateEnableControls();
-
-    forceConnectedState();
-    refreshWidgetsValues();
 }
 
 ConfigRevoWidget::~ConfigRevoWidget()
@@ -262,19 +238,25 @@ void ConfigRevoWidget::storeAndClearBoardRotation()
     if (!isBoardRotationStored) {
         UAVObjectUpdaterHelper updateHelper;
 
-        // Store current board rotation
+        // Store current board rotation and board level trim
         isBoardRotationStored = true;
         AttitudeSettings *attitudeSettings = AttitudeSettings::GetInstance(getObjectManager());
         Q_ASSERT(attitudeSettings);
         AttitudeSettings::DataFields data  = attitudeSettings->getData();
-        storedBoardRotation[AttitudeSettings::BOARDROTATION_YAW]   = data.BoardRotation[AttitudeSettings::BOARDROTATION_YAW];
-        storedBoardRotation[AttitudeSettings::BOARDROTATION_ROLL]  = data.BoardRotation[AttitudeSettings::BOARDROTATION_ROLL];
-        storedBoardRotation[AttitudeSettings::BOARDROTATION_PITCH] = data.BoardRotation[AttitudeSettings::BOARDROTATION_PITCH];
+        storedBoardRotation[AttitudeSettings::BOARDROTATION_YAW]     = data.BoardRotation[AttitudeSettings::BOARDROTATION_YAW];
+        storedBoardRotation[AttitudeSettings::BOARDROTATION_ROLL]    = data.BoardRotation[AttitudeSettings::BOARDROTATION_ROLL];
+        storedBoardRotation[AttitudeSettings::BOARDROTATION_PITCH]   = data.BoardRotation[AttitudeSettings::BOARDROTATION_PITCH];
+        storedBoardLevelTrim[AttitudeSettings::BOARDLEVELTRIM_ROLL]  = data.BoardLevelTrim[AttitudeSettings::BOARDLEVELTRIM_ROLL];
+        storedBoardLevelTrim[AttitudeSettings::BOARDLEVELTRIM_PITCH] = data.BoardLevelTrim[AttitudeSettings::BOARDLEVELTRIM_PITCH];
 
-        // Set board rotation to no rotation
-        data.BoardRotation[AttitudeSettings::BOARDROTATION_YAW]    = 0;
-        data.BoardRotation[AttitudeSettings::BOARDROTATION_ROLL]   = 0;
-        data.BoardRotation[AttitudeSettings::BOARDROTATION_PITCH]  = 0;
+        // Set board rotation to zero
+        data.BoardRotation[AttitudeSettings::BOARDROTATION_YAW]     = 0;
+        data.BoardRotation[AttitudeSettings::BOARDROTATION_ROLL]    = 0;
+        data.BoardRotation[AttitudeSettings::BOARDROTATION_PITCH]   = 0;
+
+        // Set board level trim to zero
+        data.BoardLevelTrim[AttitudeSettings::BOARDLEVELTRIM_ROLL]  = 0;
+        data.BoardLevelTrim[AttitudeSettings::BOARDLEVELTRIM_PITCH] = 0;
 
         attitudeSettings->setData(data, false);
         updateHelper.doObjectAndWait(attitudeSettings);
@@ -305,13 +287,15 @@ void ConfigRevoWidget::recallBoardRotation()
         // Recall current board rotation
         isBoardRotationStored = false;
 
-        // Restore the flight controller board rotation
+        // Restore the flight controller board rotation and board level trim
         AttitudeSettings *attitudeSettings = AttitudeSettings::GetInstance(getObjectManager());
         Q_ASSERT(attitudeSettings);
         AttitudeSettings::DataFields data  = attitudeSettings->getData();
-        data.BoardRotation[AttitudeSettings::BOARDROTATION_YAW]   = storedBoardRotation[AttitudeSettings::BOARDROTATION_YAW];
-        data.BoardRotation[AttitudeSettings::BOARDROTATION_ROLL]  = storedBoardRotation[AttitudeSettings::BOARDROTATION_ROLL];
-        data.BoardRotation[AttitudeSettings::BOARDROTATION_PITCH] = storedBoardRotation[AttitudeSettings::BOARDROTATION_PITCH];
+        data.BoardRotation[AttitudeSettings::BOARDROTATION_YAW]     = storedBoardRotation[AttitudeSettings::BOARDROTATION_YAW];
+        data.BoardRotation[AttitudeSettings::BOARDROTATION_ROLL]    = storedBoardRotation[AttitudeSettings::BOARDROTATION_ROLL];
+        data.BoardRotation[AttitudeSettings::BOARDROTATION_PITCH]   = storedBoardRotation[AttitudeSettings::BOARDROTATION_PITCH];
+        data.BoardLevelTrim[AttitudeSettings::BOARDLEVELTRIM_ROLL]  = storedBoardLevelTrim[AttitudeSettings::BOARDLEVELTRIM_ROLL];
+        data.BoardLevelTrim[AttitudeSettings::BOARDLEVELTRIM_PITCH] = storedBoardLevelTrim[AttitudeSettings::BOARDLEVELTRIM_PITCH];
 
         attitudeSettings->setData(data, false);
         updateHelper.doObjectAndWait(attitudeSettings);
@@ -414,11 +398,14 @@ void ConfigRevoWidget::displayTemperatureRange(float temperatureRange)
  * Called by the ConfigTaskWidget parent when RevoCalibration is updated
  * to update the UI
  */
-void ConfigRevoWidget::refreshWidgetsValues(UAVObject *object)
+void ConfigRevoWidget::refreshWidgetsValuesImpl(UAVObject *obj)
 {
-    ConfigTaskWidget::refreshWidgetsValues(object);
+    Q_UNUSED(obj);
 
-    m_ui->isSetCheckBox->setEnabled(false);
+    m_ui->isSetCheckBox->setEnabled(true);
+    m_ui->isSetCheckBox->setToolTip(tr("When checked, the current Home Location is saved to the board.\n"
+                                       "When unchecked, the Home Location will be updated and set using\n"
+                                       "the first GPS position received after power up."));
 
     HomeLocation *homeLocation = HomeLocation::GetInstance(getObjectManager());
     Q_ASSERT(homeLocation);
@@ -431,10 +418,8 @@ void ConfigRevoWidget::refreshWidgetsValues(UAVObject *object)
     onBoardAuxMagError();
 }
 
-void ConfigRevoWidget::updateObjectsFromWidgets()
+void ConfigRevoWidget::updateObjectsFromWidgetsImpl()
 {
-    ConfigTaskWidget::updateObjectsFromWidgets();
-
     if (m_accelCalibrationModel->dirty()) {
         m_accelCalibrationModel->save();
     }
@@ -713,10 +698,4 @@ void ConfigRevoWidget::updateMagStatus()
         m_ui->magStatusSource->setText(tr("Unknown"));
         m_ui->magStatusSource->setToolTip("");
     }
-}
-
-void ConfigRevoWidget::openHelp()
-{
-    QDesktopServices::openUrl(QUrl(QString(WIKI_URL_ROOT) + QString("Revo+Attitude+Configuration"),
-                                   QUrl::StrictMode));
 }

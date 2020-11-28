@@ -2,7 +2,8 @@
  ******************************************************************************
  *
  * @file       connectionmanager.cpp
- * @author     The OpenPilot Team, http://www.openpilot.org Copyright (C) 2010.
+ * @author     The LibrePilot Project, http://www.librepilot.org Copyright (C) 2016.
+ *             The OpenPilot Team, http://www.openpilot.org Copyright (C) 2010.
  *             Parts by Nokia Corporation (qt-info@nokia.com) Copyright (C) 2009.
  * @addtogroup GCSPlugins GCS Plugins
  * @{
@@ -40,6 +41,30 @@
 #include <QEventLoop>
 
 namespace Core {
+QString DevListItem::getConName() const
+{
+    if (connection == NULL) {
+        return "";
+    }
+    return connection->shortName() + ": " + device.displayName;
+}
+
+QString DevListItem::getConDescription() const
+{
+    if (connection == NULL) {
+        return "";
+    }
+    QString description = device.displayName;
+    if (!device.description.isEmpty()) {
+        description += " - " + device.description;
+    }
+    // truncate description if too long
+    if (description.length() > 50) {
+        description = description.left(50) + "...";
+    }
+    return description;
+}
+
 ConnectionManager::ConnectionManager(Internal::MainWindow *mainWindow) :
     QWidget(mainWindow),
     m_availableDevList(0),
@@ -71,9 +96,11 @@ ConnectionManager::ConnectionManager(Internal::MainWindow *mainWindow) :
     QObject::connect(m_availableDevList, SIGNAL(currentIndexChanged(int)), this, SLOT(onDeviceSelectionChanged(int)));
 
     // setup our reconnect timers
+    // TODO these are never started because telemetryConnected is not called anymore
     reconnect = new QTimer(this);
-    reconnectCheck = new QTimer(this);
     connect(reconnect, SIGNAL(timeout()), this, SLOT(reconnectSlot()));
+
+    reconnectCheck = new QTimer(this);
     connect(reconnectCheck, SIGNAL(timeout()), this, SLOT(reconnectCheckSlot()));
 }
 
@@ -91,7 +118,6 @@ void ConnectionManager::init()
     QObject::connect(ExtensionSystem::PluginManager::instance(), SIGNAL(aboutToRemoveObject(QObject *)), this, SLOT(aboutToRemoveObject(QObject *)));
 }
 
-
 // TODO needs documentation?
 void ConnectionManager::addWidget(QWidget *widget)
 {
@@ -106,8 +132,7 @@ void ConnectionManager::addWidget(QWidget *widget)
 bool ConnectionManager::connectDevice(DevListItem device)
 {
     Q_UNUSED(device);
-    QString deviceName = m_availableDevList->itemData(m_availableDevList->currentIndex(), Qt::ToolTipRole).toString();
-    DevListItem connection_device = findDevice(deviceName);
+    DevListItem connection_device = findDevice(m_availableDevList->currentIndex());
 
     if (!connection_device.connection) {
         return false;
@@ -255,8 +280,7 @@ void ConnectionManager::onConnectClicked()
     // Check if we have a ioDev already created:
     if (!m_ioDev) {
         // connecting to currently selected device
-        QString deviceName = m_availableDevList->itemData(m_availableDevList->currentIndex(), Qt::ToolTipRole).toString();
-        DevListItem device = findDevice(deviceName);
+        DevListItem device = findDevice(m_availableDevList->currentIndex());
         if (device.connection) {
             connectDevice(device);
         }
@@ -271,7 +295,7 @@ void ConnectionManager::onConnectClicked()
  */
 void ConnectionManager::telemetryConnected()
 {
-    qDebug() << "TelemetryMonitor: connected";
+    qDebug() << "ConnectionManager::telemetryConnected";
 
     if (reconnectCheck->isActive()) {
         reconnectCheck->stop();
@@ -283,7 +307,7 @@ void ConnectionManager::telemetryConnected()
  */
 void ConnectionManager::telemetryDisconnected()
 {
-    qDebug() << "TelemetryMonitor: disconnected";
+    qDebug() << "ConnectionManager::telemetryDisconnected";
 
     if (m_ioDev) {
         if (m_connectionDevice.connection->shortName() == "Serial") {
@@ -296,17 +320,18 @@ void ConnectionManager::telemetryDisconnected()
 
 void ConnectionManager::reconnectSlot()
 {
-    qDebug() << "reconnect";
+    qDebug() << "ConnectionManager::reconnectSlot";
+
     if (m_ioDev->isOpen()) {
         m_ioDev->close();
     }
 
     if (m_ioDev->open(QIODevice::ReadWrite)) {
-        qDebug() << "reconnect successfull";
+        qDebug() << "ConnectionManager::reconnectSlot - reconnect successful";
         reconnect->stop();
         reconnectCheck->start(20000);
     } else {
-        qDebug() << "reconnect NOT successfull";
+        qDebug() << "ConnectionManager::reconnectSlot - reconnect NOT successful";
     }
 }
 
@@ -319,15 +344,15 @@ void ConnectionManager::reconnectCheckSlot()
 /**
  *   Find a device by its displayed (visible on screen) name
  */
-DevListItem ConnectionManager::findDevice(const QString &devName)
+DevListItem ConnectionManager::findDevice(int devNumber)
 {
     foreach(DevListItem d, m_devList) {
-        if (d.getConName() == devName) {
+        if (d.displayNumber == devNumber) {
             return d;
         }
     }
 
-    qDebug() << "findDevice: cannot find " << devName << " in device list";
+    qWarning() << "ConnectionManager::findDevice - cannot find " << devNumber << " in device list";
 
     DevListItem d;
     d.connection = NULL;
@@ -441,7 +466,7 @@ void ConnectionManager::devChanged(IConnection *connection)
 
     updateConnectionDropdown();
 
-    qDebug() << "# devices " << m_devList.count();
+    qDebug() << "ConnectionManager::devChanged - device count:" << m_devList.count();
     emit availableDevicesChanged(m_devList);
 
 
@@ -456,28 +481,24 @@ void ConnectionManager::devChanged(IConnection *connection)
 void ConnectionManager::updateConnectionDropdown()
 {
     // add all the list again to the combobox
-    foreach(DevListItem d, m_devList) {
-        m_availableDevList->addItem(d.getConName());
-        m_availableDevList->setItemData(m_availableDevList->count() - 1, d.getConName(), Qt::ToolTipRole);
-        if (!m_ioDev && d.getConName().startsWith("USB")) {
+    for (QLinkedList<DevListItem>::iterator iter = m_devList.begin(); iter != m_devList.end(); ++iter) {
+        m_availableDevList->addItem(iter->getConName());
+        // record position in the box in the device
+        iter->displayNumber = m_availableDevList->count() - 1;
+        m_availableDevList->setItemData(m_availableDevList->count() - 1, iter->getConDescription(), Qt::ToolTipRole);
+        if (!m_ioDev && iter->getConName().startsWith("USB")) {
             if (m_mainWindow->generalSettings()->autoConnect() || m_mainWindow->generalSettings()->autoSelect()) {
                 m_availableDevList->setCurrentIndex(m_availableDevList->count() - 1);
             }
             if (m_mainWindow->generalSettings()->autoConnect() && polling) {
-                qDebug() << "Automatically opening device";
-                connectDevice(d);
-                qDebug() << "ConnectionManager::updateConnectionDropdown autoconnected USB device";
+                qDebug() << "ConnectionManager::updateConnectionDropdown - auto-connecting USB device";
+                connectDevice(*iter);
             }
         }
     }
     if (m_ioDev) {
         // if a device is connected make it the one selected on the dropbox
-        for (int i = 0; i < m_availableDevList->count(); i++) {
-            QString deviceName = m_availableDevList->itemData(i, Qt::ToolTipRole).toString();
-            if (m_connectionDevice.getConName() == deviceName) {
-                m_availableDevList->setCurrentIndex(i);
-            }
-        }
+        m_availableDevList->setCurrentIndex(m_connectionDevice.displayNumber);
     }
     // update combo box tooltip
     onDeviceSelectionChanged(m_availableDevList->currentIndex());

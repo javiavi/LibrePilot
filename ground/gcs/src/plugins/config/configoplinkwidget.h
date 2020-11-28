@@ -8,7 +8,7 @@
  * @{
  * @addtogroup ConfigPlugin Config Plugin
  * @{
- * @brief The Configuration Gadget used to configure the OPLink and Revo modem
+ * @brief The Configuration Gadget used to configure the OPLink, Revo and Sparky2 modems
  *****************************************************************************/
 /*
  * This program is free software; you can redistribute it and/or modify
@@ -30,7 +30,8 @@
 
 #include "configtaskwidget.h"
 
-#include "oplinksettings.h"
+class OPLinkStatus;
+class OPLinkSettings;
 
 class Ui_OPLinkWidget;
 
@@ -41,38 +42,51 @@ public:
     ConfigOPLinkWidget(QWidget *parent = 0);
     ~ConfigOPLinkWidget();
 
-public slots:
-    void updateStatus(UAVObject *object1);
-    void updateSettings(UAVObject *object1);
+protected:
+    virtual void refreshWidgetsValuesImpl(UAVObject *obj);
 
 private:
     Ui_OPLinkWidget *m_oplink;
 
-    // The OPLink status UAVObject
-    UAVDataObject *oplinkStatusObj;
-
-    // The OPLink ssettins UAVObject
+    OPLinkStatus *oplinkStatusObj;
     OPLinkSettings *oplinkSettingsObj;
 
-    // Are the settings current?
-    bool settingsUpdated;
+    // Frequency display settings
+    float frequency_base;
+    float frequency_step;
+    QString channel_tooltip;
 
-protected:
-    void updateEnableControls();
+    // Is the status current?
+    bool statusUpdated;
+
+    void updateStatus();
+    void updateInfo();
+    void updateSettings();
+
+    void setOPLMOptionsVisible(bool visible);
 
 private slots:
-    void disconnected();
-    void linkTypeChanged();
+    void connected();
+
     void protocolChanged();
+    void linkTypeChanged();
+    void customIDChanged();
+    void coordIDChanged();
+
     void minChannelChanged();
     void maxChannelChanged();
-    void updateCoordID();
-    void updateCustomDeviceID();
-    void unbind();
+    void rfBandChanged();
     void channelChanged(bool isMax);
+    void updateFrequencyDisplay();
+
     void mainPortChanged();
     void flexiPortChanged();
-    void vcpPortChanged();
+    void radioPriStreamChanged();
+    void radioAuxStreamChanged();
+    void vcpBridgeChanged();
+
+    void unbind();
+    void clearDeviceID();
 };
 
 #endif // CONFIGOPLINKWIDGET_H

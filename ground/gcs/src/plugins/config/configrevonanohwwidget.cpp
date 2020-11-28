@@ -1,14 +1,14 @@
 /**
  ******************************************************************************
  *
- * @file       configrevohwwidget.cpp
- * @author     The LibrePilot Project, http://www.librepilot.org Copyright (C) 2015.
+ * @file       configrevonanohwwidget.cpp
+ * @author     The LibrePilot Project, http://www.librepilot.org Copyright (C) 2016.
  *             The OpenPilot Team, http://www.openpilot.org Copyright (C) 2010.
  * @addtogroup GCSPlugins GCS Plugins
  * @{
  * @addtogroup ConfigPlugin Config Plugin
  * @{
- * @brief Revolution hardware configuration panel
+ * @brief Revolution Nano hardware configuration panel
  *****************************************************************************/
 /*
  * This program is free software; you can redistribute it and/or modify
@@ -29,32 +29,26 @@
 
 #include "ui_configrevonanohwwidget.h"
 
-#include <extensionsystem/pluginmanager.h>
-#include <coreplugin/generalsettings.h>
-#include <uavobjecthelper.h>
-
 #include "hwsettings.h"
 
 #include <QDebug>
-#include <QDesktopServices>
-#include <QUrl>
-#include <QMessageBox>
 
-ConfigRevoNanoHWWidget::ConfigRevoNanoHWWidget(QWidget *parent) : ConfigTaskWidget(parent), m_refreshing(true)
+ConfigRevoNanoHWWidget::ConfigRevoNanoHWWidget(QWidget *parent) : ConfigTaskWidget(parent)
 {
     m_ui = new Ui_RevoNanoHWWidget();
     m_ui->setupUi(this);
 
-    ExtensionSystem::PluginManager *pm = ExtensionSystem::PluginManager::instance();
-    Core::Internal::GeneralSettings *settings = pm->getObject<Core::Internal::GeneralSettings>();
-    if (!settings->useExpertMode()) {
-        m_ui->saveTelemetryToRAM->setEnabled(false);
-        m_ui->saveTelemetryToRAM->setVisible(false);
-    }
+    m_ui->boardImg->load(QString(":/configgadget/images/revo_nano.svg"));
+    QSize picSize = m_ui->boardImg->sizeHint();
+    picSize.scale(450, 450, Qt::KeepAspectRatio);
+    m_ui->boardImg->setFixedSize(picSize);
 
-    addApplySaveButtons(m_ui->saveTelemetryToRAM, m_ui->saveTelemetryToSD);
+    // must be done before auto binding !
+    setWikiURL("Revo+Nano+Configuration");
 
-    forceConnectedState();
+    addAutoBindings();
+
+    addUAVObject("HwSettings");
 
     addWidgetBinding("HwSettings", "RM_FlexiPort", m_ui->cbFlexi);
     addWidgetBinding("HwSettings", "RM_MainPort", m_ui->cbMain);
@@ -73,13 +67,7 @@ ConfigRevoNanoHWWidget::ConfigRevoNanoHWWidget(QWidget *parent) : ConfigTaskWidg
     addWidgetBinding("GPSSettings", "DataProtocol", m_ui->cbMainGPSProtocol);
     addWidgetBinding("GPSSettings", "DataProtocol", m_ui->cbFlexiGPSProtocol);
 
-    connect(m_ui->cchwHelp, SIGNAL(clicked()), this, SLOT(openHelp()));
     setupCustomCombos();
-    enableControls(true);
-    populateWidgets();
-    refreshWidgetsValues();
-    setDirty(false);
-    m_refreshing = false;
 }
 
 ConfigRevoNanoHWWidget::~ConfigRevoNanoHWWidget()
@@ -97,37 +85,27 @@ void ConfigRevoNanoHWWidget::setupCustomCombos()
     connect(m_ui->cbRcvr, SIGNAL(currentIndexChanged(int)), this, SLOT(rcvrPortChanged(int)));
 }
 
-void ConfigRevoNanoHWWidget::refreshWidgetsValues(UAVObject *obj)
+void ConfigRevoNanoHWWidget::refreshWidgetsValuesImpl(UAVObject *obj)
 {
-    m_refreshing = true;
-    ConfigTaskWidget::refreshWidgetsValues(obj);
+    Q_UNUSED(obj);
 
     usbVCPPortChanged(0);
     mainPortChanged(0);
     flexiPortChanged(0);
     rcvrPortChanged(0);
-    m_refreshing = false;
 }
 
-void ConfigRevoNanoHWWidget::updateObjectsFromWidgets()
+void ConfigRevoNanoHWWidget::updateObjectsFromWidgetsImpl()
 {
-    ConfigTaskWidget::updateObjectsFromWidgets();
-
-    HwSettings *hwSettings = HwSettings::GetInstance(getObjectManager());
-    HwSettings::DataFields data = hwSettings->getData();
-
     // If any port is configured to be GPS port, enable GPS module if it is not enabled.
-    // Otherwise disable GPS module.
-    if (isComboboxOptionSelected(m_ui->cbFlexi, HwSettings::RM_FLEXIPORT_GPS)
-        || isComboboxOptionSelected(m_ui->cbMain, HwSettings::RM_MAINPORT_GPS)) {
-        data.OptionalModules[HwSettings::OPTIONALMODULES_GPS] = HwSettings::OPTIONALMODULES_ENABLED;
-    } else {
-        data.OptionalModules[HwSettings::OPTIONALMODULES_GPS] = HwSettings::OPTIONALMODULES_DISABLED;
-    }
+    // GPS module will be already built in for RevoNano board, keep this check just in case.
+    HwSettings *hwSettings = HwSettings::GetInstance(getObjectManager());
 
-    UAVObjectUpdaterHelper updateHelper;
-    hwSettings->setData(data, false);
-    updateHelper.doObjectAndWait(hwSettings);
+    if ((hwSettings->optionalModulesGPS() == HwSettings_OptionalModules::Disabled) &&
+        (isComboboxOptionSelected(m_ui->cbFlexi, HwSettings::RM_FLEXIPORT_GPS) ||
+         isComboboxOptionSelected(m_ui->cbMain, HwSettings::RM_MAINPORT_GPS))) {
+        hwSettings->setOptionalModulesGPS(HwSettings_OptionalModules::Enabled);
+    }
 }
 
 void ConfigRevoNanoHWWidget::usbVCPPortChanged(int index)
@@ -278,10 +256,4 @@ void ConfigRevoNanoHWWidget::rcvrPortChanged(int index)
 {
     Q_UNUSED(index);
     /* Nano has no USART at rcvrPort */
-}
-
-void ConfigRevoNanoHWWidget::openHelp()
-{
-    QDesktopServices::openUrl(QUrl(QString(WIKI_URL_ROOT) + QString("Revo+Nano+Configuration"),
-                                   QUrl::StrictMode));
 }

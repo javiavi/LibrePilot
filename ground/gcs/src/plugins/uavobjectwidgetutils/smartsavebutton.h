@@ -46,7 +46,6 @@ public:
 
 public:
     SmartSaveButton(ConfigTaskWidget *configTaskWidget);
-    void addButtons(QPushButton *save, QPushButton *apply);
     void setObjects(QList<UAVDataObject *>);
     void addObject(UAVDataObject *);
     void clearObjects();
@@ -58,7 +57,7 @@ public:
 
 signals:
     void preProcessOperations();
-    void saveSuccessfull();
+    void saveSuccessful();
     void beginOp();
     void endOp();
 

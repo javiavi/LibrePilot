@@ -8,7 +8,7 @@
  * @{
  * @addtogroup ConfigPlugin Config Plugin
  * @{
- * @brief Servo input/output configuration panel for the config gadget
+ * @brief Servo input configuration panel for the config gadget
  *****************************************************************************/
 /*
  * This program is free software; you can redistribute it and/or modify
@@ -29,8 +29,7 @@
 #define CONFIGINPUTWIDGET_H
 
 #include "uavobjectwidgetutils/configtaskwidget.h"
-#include "extensionsystem/pluginmanager.h"
-#include "uavobjectmanager.h"
+
 #include "uavobject.h"
 
 #include "manualcontrolcommand.h"
@@ -42,7 +41,7 @@
 #include "flightstatus.h"
 #include "accessorydesired.h"
 #include "systemsettings.h"
-
+#include "hwsettings.h"
 #include <QPointer>
 #include <QWidget>
 #include <QList>
@@ -73,10 +72,17 @@ public:
     void enableControls(bool enable);
     bool shouldObjectBeSaved(UAVObject *object);
 
+public slots:
+    void setOutputConfigSafe(bool status);
+
+signals:
+    void inputCalibrationStateChanged(bool newState);
+
 private:
     bool throttleError;
     bool growing;
     bool reverse[ManualControlSettings::CHANNELNEUTRAL_NUMELEM];
+    bool outputConfigIsSafe;
     txMovements currentMovement;
     int movePos;
     void setTxMovement(txMovements movement);
@@ -130,6 +136,7 @@ private:
     AccessoryDesired *accessoryDesiredObj1;
     AccessoryDesired *accessoryDesiredObj2;
     AccessoryDesired *accessoryDesiredObj3;
+    AccessoryDesired *rssiDesiredObj4;
 
     ManualControlSettings *manualSettingsObj;
     ManualControlSettings::DataFields manualSettingsData;
@@ -144,6 +151,8 @@ private:
 
     SystemSettings *systemSettingsObj;
     SystemSettings::DataFields systemSettingsData;
+
+    HwSettings *hwSettingsObj;
 
     typedef struct {
         ManualControlSettings::DataFields manualSettingsData;
@@ -212,7 +221,6 @@ private slots:
     void wzCancel();
     void goToWizard();
     void disableWizardButton(int);
-    void openHelp();
     void identifyControls();
     void identifyLimits();
     void moveTxControls();
@@ -229,11 +237,14 @@ private slots:
     void resetChannelSettings();
     void resetFlightModeSettings();
     void resetActuatorSettings();
-    void forceOneFlightMode();
     void updateReceiverActivityStatus();
 
     void failsafeFlightModeChanged(int index);
     void failsafeFlightModeCbToggled(bool checked);
+    void failsafeBatteryWarningFlightModeChanged(int index);
+    void failsafeBatteryWarningFlightModeCbToggled(bool checked);
+    void failsafeBatteryCriticalFlightModeChanged(int index);
+    void failsafeBatteryCriticalFlightModeCbToggled(bool checked);
     void enableControlsChanged(bool enabled);
 
 protected:

@@ -27,9 +27,11 @@
  */
 #include "uploadergadgetwidget.h"
 
+#include "ui_uploader.h"
+
+#include <ophid/inc/ophid_usbmon.h>
+
 #include "flightstatus.h"
-#include "oplinkstatus.h"
-#include "delay.h"
 #include "devicewidget.h"
 #include "runningdevicewidget.h"
 
@@ -38,12 +40,14 @@
 #include <coreplugin/coreconstants.h>
 #include <coreplugin/connectionmanager.h>
 #include <uavtalk/telemetrymanager.h>
+#include <uavtalk/oplinkmanager.h>
+#include "rebootdialog.h"
 
 #include <QDesktopServices>
 #include <QMessageBox>
 #include <QProgressBar>
+#include <QtSerialPort/QSerialPortInfo>
 #include <QDebug>
-#include "rebootdialog.h"
 
 #define DFU_DEBUG true
 
@@ -482,7 +486,7 @@ void UploaderGadgetWidget::goToBootloader(UAVObject *callerObj, bool success)
 
         if (m_resetOnly) {
             m_resetOnly = false;
-            delay::msleep(3500);
+            QThread::msleep(3500);
             systemBoot();
             break;
         }
@@ -675,16 +679,21 @@ bool UploaderGadgetWidget::autoUpdateCapable()
 
 bool UploaderGadgetWidget::autoUpdate(bool erase)
 {
-    if (m_oplinkwatchdog.isConnected() &&
-        m_oplinkwatchdog.opLinkType() == OPLinkWatchdog::OPLINK_MINI) {
+    ExtensionSystem::PluginManager *pluginManager = ExtensionSystem::PluginManager::instance();
+
+    Q_ASSERT(pluginManager);
+
+    OPLinkManager *opLinkManager = pluginManager->getObject<OPLinkManager>();
+    Q_ASSERT(opLinkManager);
+
+    if (opLinkManager->isConnected() &&
+        opLinkManager->opLinkType() == OPLinkManager::OPLINK_MINI) {
         emit progressUpdate(FAILURE, QVariant(tr("To upgrade the OPLinkMini board please disconnect it from the USB port, "
-                                                 "press the Upgrade again button and follow instructions on screen.")));
+                                                 "press the Upgrade button again and follow instructions on screen.")));
         emit autoUpdateFailed();
         return false;
     }
 
-    ExtensionSystem::PluginManager *pluginManager = ExtensionSystem::PluginManager::instance();
-    Q_ASSERT(pluginManager);
     TelemetryManager *telemetryManager = pluginManager->getObject<TelemetryManager>();
     Q_ASSERT(telemetryManager);
 
@@ -776,6 +785,21 @@ bool UploaderGadgetWidget::autoUpdate(bool erase)
     case 0x9201:
         filename = "fw_sparky2";
         break;
+    case 0x1001:
+        filename = "fw_spracingf3";
+        break;
+    case 0x1002:
+        filename = "fw_spracingf3evo";
+        break;
+    case 0x1003:
+        filename = "fw_nucleof303re";
+        break;
+    case 0x1005:
+        filename = "fw_pikoblx";
+        break;
+    case 0x1006:
+        filename = "fw_tinyfish";
+        break;
     default:
         emit progressUpdate(FAILURE, QVariant(tr("Unknown board id '0x%1'").arg(QString::number(m_dfu->devices[0].ID, 16))));
         emit autoUpdateFailed();
@@ -797,7 +821,7 @@ bool UploaderGadgetWidget::autoUpdate(bool erase)
     firmware = file.readAll();
     QEventLoop eventLoop2;
     connect(m_dfu, SIGNAL(progressUpdated(int)), this, SLOT(autoUpdateFlashProgress(int)));
-    connect(m_dfu, SIGNAL(uploadFinished(OP_DFU::Status)), &eventLoop2, SLOT(quit()));
+    connect(m_dfu, SIGNAL(uploadFinished(DFU::Status)), &eventLoop2, SLOT(quit()));
     emit progressUpdate(UPLOADING_FW, QVariant());
     if (!m_dfu->enterDFU(0)) {
         emit progressUpdate(FAILURE, QVariant(tr("Could not enter direct firmware upload mode.")));
@@ -813,7 +837,7 @@ bool UploaderGadgetWidget::autoUpdate(bool erase)
     eventLoop2.exec();
     QByteArray desc = firmware.right(100);
     emit progressUpdate(UPLOADING_DESC, QVariant());
-    if (m_dfu->UploadDescription(desc) != OP_DFU::Last_operation_Success) {
+    if (m_dfu->UploadDescription(desc) != DFU::Last_operation_Success) {
         emit progressUpdate(FAILURE, QVariant(tr("Failed to upload firmware description.")));
         emit autoUpdateFailed();
         return false;
@@ -824,11 +848,11 @@ bool UploaderGadgetWidget::autoUpdate(bool erase)
     // Wait for board to connect to GCS again after boot and erase
     // For older board like CC3D this can take some time
     // Theres a special case with OPLink
-    if (!telemetryManager->isConnected() && !m_oplinkwatchdog.isConnected()) {
+    if (!telemetryManager->isConnected() && !opLinkManager->isConnected()) {
         progressUpdate(erase ? BOOTING_AND_ERASING : BOOTING, QVariant());
         ResultEventLoop eventLoop;
         connect(telemetryManager, SIGNAL(connected()), &eventLoop, SLOT(success()));
-        connect(&m_oplinkwatchdog, SIGNAL(opLinkMiniConnected()), &eventLoop, SLOT(success()));
+        connect(opLinkManager, SIGNAL(connected()), &eventLoop, SLOT(success()));
 
         if (eventLoop.run(REBOOT_TIMEOUT + (erase ? ERASE_TIMEOUT : 0)) != 0) {
             emit progressUpdate(FAILURE, QVariant(tr("Timed out while booting.")));
@@ -836,7 +860,7 @@ bool UploaderGadgetWidget::autoUpdate(bool erase)
             return false;
         }
 
-        disconnect(&m_oplinkwatchdog, SIGNAL(opLinkMiniConnected()), &eventLoop, SLOT(success()));
+        disconnect(opLinkManager, SIGNAL(connected()), &eventLoop, SLOT(success()));
         disconnect(telemetryManager, SIGNAL(connected()), &eventLoop, SLOT(success()));
     }
 

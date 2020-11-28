@@ -2,7 +2,8 @@
  ******************************************************************************
  *
  * @file       uploadergadgetoptionspage.h
- * @author     The OpenPilot Team, http://www.openpilot.org Copyright (C) 2010.
+ * @author     The LibrePilot Project, http://www.librepilot.org Copyright (C) 2015
+ *             The OpenPilot Team, http://www.openpilot.org Copyright (C) 2010.
  * @addtogroup GCSPlugins GCS Plugins
  * @{
  * @addtogroup YModemUploader YModem Serial Uploader Plugin
@@ -27,19 +28,18 @@
 
 #ifndef UPLOADERGADGETOPTIONSPAGE_H
 #define UPLOADERGADGETOPTIONSPAGE_H
-#include <QtSerialPort/QSerialPort>
-#include <QtSerialPort/QSerialPortInfo>
-#include "coreplugin/dialogs/ioptionspage.h"
-#include "QString"
-#include <QStringList>
-#include <QDebug>
+
 #include "uploader_global.h"
 
-namespace Core {
-class IUAVGadgetConfiguration;
-}
+#include "coreplugin/dialogs/ioptionspage.h"
+
+#include <QEventLoop>
+#include <QString>
+#include <QStringList>
+#include <QDebug>
+
 class UploaderGadgetConfiguration;
-class QTextEdit;
+
 class QComboBox;
 class QSpinBox;
 

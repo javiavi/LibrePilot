@@ -41,10 +41,7 @@ class Ui_AircraftWidget;
 class QWidget;
 
 /*
- * This class derives from ConfigTaskWidget and overrides its default "binding" mechanism.
- * This widget bypasses automatic synchronization of UAVObjects and UI by providing its own implementations of
- *     virtual void refreshWidgetsValues(UAVObject *obj = NULL);
- *     virtual void updateObjectsFromWidgets();
+ * This class derives from ConfigTaskWidget but almost bypasses the need its default "binding" mechanism.
  *
  * It does use the "dirty" state management and registers its relevant widgets with ConfigTaskWidget to do so.
  *
@@ -52,7 +49,6 @@ class QWidget;
  * Note: for "dirty" state management it is important to register the fields of child widgets with the parent
  * ConfigVehicleTypeWidget class.
  *
- * TODO consider to call "super" to benefit from default logic...
  * TODO improve handling of relationship with VehicleConfig derived classes (i.e. ConfigTaskWidget within ConfigTaskWidget)
  */
 class ConfigVehicleTypeWidget : public ConfigTaskWidget {
@@ -64,9 +60,10 @@ public:
     ConfigVehicleTypeWidget(QWidget *parent = 0);
     ~ConfigVehicleTypeWidget();
 
-protected slots:
-    virtual void refreshWidgetsValues(UAVObject *object = NULL);
-    virtual void updateObjectsFromWidgets();
+protected:
+    virtual void enableControls(bool enable);
+    virtual void refreshWidgetsValuesImpl(UAVObject *obj);
+    virtual void updateObjectsFromWidgetsImpl();
 
 private:
     Ui_AircraftWidget *m_aircraft;
@@ -76,15 +73,19 @@ private:
     // Maps a frame category to its index in the m_aircraft->airframesWidget QStackedWidget
     QMap<int, int> m_vehicleIndexMap;
 
+    QString frameType();
+    void setFrameType(QString frameType);
 
-    int frameCategory(QString frameType);
+    QString vehicleName();
+    void setVehicleName(QString name);
+
+    static int frameCategory(QString frameType);
 
     VehicleConfig *getVehicleConfigWidget(int frameCategory);
     VehicleConfig *createVehicleConfigWidget(int frameCategory);
 
 private slots:
-    void switchAirframeType(int index);
-    void openHelp();
+    void frameTypeChanged(int index);
 };
 
 #endif // CONFIGVEHICLETYPEWIDGET_H

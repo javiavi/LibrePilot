@@ -236,7 +236,7 @@
                     "values": [
                         {
                             "name": "0",
-                            "value": "FALSE"
+                            "value": "False"
                         }
                     ]
                 },
@@ -346,27 +346,27 @@
                     "values": [
                         {
                             "name": "0",
-                            "value": "FALSE"
+                            "value": "False"
                         },
                         {
                             "name": "1",
-                            "value": "FALSE"
+                            "value": "False"
                         },
                         {
                             "name": "2",
-                            "value": "FALSE"
+                            "value": "False"
                         },
                         {
                             "name": "3",
-                            "value": "FALSE"
+                            "value": "False"
                         },
                         {
                             "name": "4",
-                            "value": "FALSE"
+                            "value": "False"
                         },
                         {
                             "name": "5",
-                            "value": "FALSE"
+                            "value": "False"
                         }
                     ]
                 },
@@ -399,7 +399,7 @@
                     "values": [
                         {
                             "name": "0",
-                            "value": "TRUE"
+                            "value": "True"
                         }
                     ]
                 }
@@ -680,7 +680,7 @@
                     "values": [
                         {
                             "name": "0",
-                            "value": "FALSE"
+                            "value": "False"
                         }
                     ]
                 },
@@ -691,7 +691,7 @@
                     "values": [
                         {
                             "name": "0",
-                            "value": "FALSE"
+                            "value": "False"
                         }
                     ]
                 },
@@ -1005,7 +1005,7 @@
                     "values": [
                         {
                             "name": "0",
-                            "value": "TRUE"
+                            "value": "True"
                         }
                     ]
                 },
@@ -1016,7 +1016,7 @@
                     "values": [
                         {
                             "name": "0",
-                            "value": "FALSE"
+                            "value": "False"
                         }
                     ]
                 },
@@ -1330,7 +1330,7 @@
                     "values": [
                         {
                             "name": "0",
-                            "value": "TRUE"
+                            "value": "True"
                         }
                     ]
                 },
@@ -1341,7 +1341,7 @@
                     "values": [
                         {
                             "name": "0",
-                            "value": "FALSE"
+                            "value": "False"
                         }
                     ]
                 },
@@ -1397,19 +1397,19 @@
                         },
                         {
                             "name": "25",
-                            "value": 0.22499999403953552
+                            "value": 0.25
                         },
                         {
                             "name": "50",
-                            "value": 0.44999998807907104
+                            "value": 0.5
                         },
                         {
                             "name": "75",
-                            "value": 0.67499995231628418
+                            "value": 0.75
                         },
                         {
                             "name": "100",
-                            "value": 0.89999997615814209
+                            "value": 1
                         }
                     ]
                 },
@@ -1424,19 +1424,19 @@
                         },
                         {
                             "name": "25",
-                            "value": 0.22499999403953552
+                            "value": 0.25
                         },
                         {
                             "name": "50",
-                            "value": 0.44999998807907104
+                            "value": 0.5
                         },
                         {
                             "name": "75",
-                            "value": 0.67499995231628418
+                            "value": 0.75
                         },
                         {
                             "name": "100",
-                            "value": 0.89999997615814209
+                            "value": 1
                         }
                     ]
                 },

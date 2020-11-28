@@ -23,8 +23,7 @@ HEADERS += \
     uploadergadgetoptionspage.h \
     uploadergadgetwidget.h \
     uploaderplugin.h \
-    op_dfu.h \
-    delay.h \
+    dfu.h \
     devicewidget.h \
     SSP/port.h \
     SSP/qssp.h \
@@ -33,8 +32,7 @@ HEADERS += \
     runningdevicewidget.h \
     uploader_global.h \
     enums.h \
-    rebootdialog.h \
-    oplinkwatchdog.h
+    rebootdialog.h
 
 SOURCES += \
     uploadergadget.cpp \
@@ -43,15 +41,13 @@ SOURCES += \
     uploadergadgetoptionspage.cpp \
     uploadergadgetwidget.cpp \
     uploaderplugin.cpp \
-    op_dfu.cpp \
-    delay.cpp \
+    dfu.cpp \
     devicewidget.cpp \
     SSP/port.cpp \
     SSP/qssp.cpp \
     SSP/qsspt.cpp \
     runningdevicewidget.cpp \
-    rebootdialog.cpp \
-    oplinkwatchdog.cpp
+    rebootdialog.cpp
 
 OTHER_FILES += Uploader.pluginspec
 
@@ -63,8 +59,9 @@ FORMS += \
 
 RESOURCES += uploader.qrc
 
-exists( ../../../../../build/gcs-synthetics/opfw_resource.qrc ) {
-    RESOURCES += ../../../../../build/gcs-synthetics/opfw_resource.qrc
+# TODO should use GCS_SYNTH_DIR... but that will break QtCreator  
+exists( ../../../../../build/gcs-synthetics/fw_resource.qrc ) {
+    RESOURCES += ../../../../../build/gcs-synthetics/fw_resource.qrc
 } else {
-    message("opfw_resource.qrc is not available, automatic firmware upgrades are disabled")
+    message("fw_resource.qrc is not available, automatic firmware upgrades are disabled")
 }

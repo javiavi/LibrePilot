@@ -2,7 +2,7 @@
  ******************************************************************************
  *
  * @file       configrevohwwidget.cpp
- * @author     The LibrePilot Project, http://www.librepilot.org Copyright (C) 2015.
+ * @author     The LibrePilot Project, http://www.librepilot.org Copyright (C) 2016.
  *             The OpenPilot Team, http://www.openpilot.org Copyright (C) 2010.
  * @addtogroup GCSPlugins GCS Plugins
  * @{
@@ -29,30 +29,26 @@
 
 #include "ui_configrevohwwidget.h"
 
-#include <extensionsystem/pluginmanager.h>
-#include <coreplugin/generalsettings.h>
-#include <uavobjecthelper.h>
-
 #include "hwsettings.h"
 
 #include <QDebug>
-#include <QDesktopServices>
-#include <QUrl>
-#include <QMessageBox>
 
-ConfigRevoHWWidget::ConfigRevoHWWidget(QWidget *parent) : ConfigTaskWidget(parent), m_refreshing(true)
+ConfigRevoHWWidget::ConfigRevoHWWidget(QWidget *parent) : ConfigTaskWidget(parent)
 {
     m_ui = new Ui_RevoHWWidget();
     m_ui->setupUi(this);
 
-    ExtensionSystem::PluginManager *pm = ExtensionSystem::PluginManager::instance();
-    Core::Internal::GeneralSettings *settings = pm->getObject<Core::Internal::GeneralSettings>();
-    if (!settings->useExpertMode()) {
-        m_ui->saveTelemetryToRAM->setEnabled(false);
-        m_ui->saveTelemetryToRAM->setVisible(false);
-    }
+    m_ui->boardImg->load(QString(":/configgadget/images/revolution.svg"));
+    QSize picSize = m_ui->boardImg->sizeHint();
+    picSize.scale(360, 360, Qt::KeepAspectRatio);
+    m_ui->boardImg->setFixedSize(picSize);
 
-    addApplySaveButtons(m_ui->saveTelemetryToRAM, m_ui->saveTelemetryToSD);
+    // must be done before auto binding !
+    setWikiURL("Revolution+Configuration");
+
+    addAutoBindings();
+
+    addUAVObject("HwSettings");
 
     addWidgetBinding("HwSettings", "RM_FlexiPort", m_ui->cbFlexi);
     addWidgetBinding("HwSettings", "RM_MainPort", m_ui->cbMain);
@@ -75,14 +71,9 @@ ConfigRevoHWWidget::ConfigRevoHWWidget(QWidget *parent) : ConfigTaskWidget(paren
     addWidgetBinding("GPSSettings", "DataProtocol", m_ui->cbFlexiGPSProtocol);
     addWidgetBinding("GPSSettings", "DataProtocol", m_ui->cbRcvrGPSProtocol);
 
-    connect(m_ui->cchwHelp, SIGNAL(clicked()), this, SLOT(openHelp()));
+    addWidgetBinding("HwSettings", "RadioAuxStream", m_ui->cbRadioAux);
 
     setupCustomCombos();
-    enableControls(true);
-    populateWidgets();
-    refreshWidgetsValues();
-    forceConnectedState();
-    m_refreshing = false;
 }
 
 ConfigRevoHWWidget::~ConfigRevoHWWidget()
@@ -104,37 +95,27 @@ void ConfigRevoHWWidget::setupCustomCombos()
     connect(m_ui->cbRcvr, SIGNAL(currentIndexChanged(int)), this, SLOT(rcvrPortChanged(int)));
 }
 
-void ConfigRevoHWWidget::refreshWidgetsValues(UAVObject *obj)
+void ConfigRevoHWWidget::refreshWidgetsValuesImpl(UAVObject *obj)
 {
-    m_refreshing = true;
-    ConfigTaskWidget::refreshWidgetsValues(obj);
+    Q_UNUSED(obj);
 
     usbVCPPortChanged(0);
     mainPortChanged(0);
     flexiPortChanged(0);
     rcvrPortChanged(0);
-    m_refreshing = false;
 }
 
-void ConfigRevoHWWidget::updateObjectsFromWidgets()
+void ConfigRevoHWWidget::updateObjectsFromWidgetsImpl()
 {
-    ConfigTaskWidget::updateObjectsFromWidgets();
-
-    HwSettings *hwSettings = HwSettings::GetInstance(getObjectManager());
-    HwSettings::DataFields data = hwSettings->getData();
-
     // If any port is configured to be GPS port, enable GPS module if it is not enabled.
-    // Otherwise disable GPS module.
-    if (isComboboxOptionSelected(m_ui->cbFlexi, HwSettings::RM_FLEXIPORT_GPS)
-        || isComboboxOptionSelected(m_ui->cbMain, HwSettings::RM_MAINPORT_GPS)) {
-        data.OptionalModules[HwSettings::OPTIONALMODULES_GPS] = HwSettings::OPTIONALMODULES_ENABLED;
-    } else {
-        data.OptionalModules[HwSettings::OPTIONALMODULES_GPS] = HwSettings::OPTIONALMODULES_DISABLED;
-    }
+    // GPS module will be already built in for Revo board, keep this check just in case.
+    HwSettings *hwSettings = HwSettings::GetInstance(getObjectManager());
 
-    UAVObjectUpdaterHelper updateHelper;
-    hwSettings->setData(data, false);
-    updateHelper.doObjectAndWait(hwSettings);
+    if ((hwSettings->optionalModulesGPS() == HwSettings_OptionalModules::Disabled) &&
+        (isComboboxOptionSelected(m_ui->cbFlexi, HwSettings::RM_FLEXIPORT_GPS) ||
+         isComboboxOptionSelected(m_ui->cbMain, HwSettings::RM_MAINPORT_GPS))) {
+        hwSettings->setOptionalModulesGPS(HwSettings_OptionalModules::Enabled);
+    }
 }
 
 void ConfigRevoHWWidget::usbVCPPortChanged(int index)
@@ -487,10 +468,4 @@ void ConfigRevoHWWidget::rcvrPortChanged(int index)
         m_ui->lblRcvrSpeed->setVisible(false);
         break;
     }
-}
-
-void ConfigRevoHWWidget::openHelp()
-{
-    QDesktopServices::openUrl(QUrl(QString(WIKI_URL_ROOT) + QString("Revolution+Configuration"),
-                                   QUrl::StrictMode));
 }

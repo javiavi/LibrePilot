@@ -2,7 +2,8 @@
  ******************************************************************************
  *
  * @file       configstabilizationwidget.h
- * @author     The OpenPilot Team, http://www.openpilot.org Copyright (C) 2010.
+ * @author     The LibrePilot Project, http://www.librepilot.org Copyright (C) 2016.
+ *             The OpenPilot Team, http://www.openpilot.org Copyright (C) 2010.
  * @addtogroup GCSPlugins GCS Plugins
  * @{
  * @addtogroup ConfigPlugin Config Plugin
@@ -28,11 +29,8 @@
 #define CONFIGSTABILIZATIONWIDGET_H
 
 #include "../uavobjectwidgetutils/configtaskwidget.h"
-#include "extensionsystem/pluginmanager.h"
-#include "uavobjectmanager.h"
-#include "uavobject.h"
 
-#include "stabilizationsettings.h"
+#include "uavobject.h"
 
 #include "qwt/src/qwt_plot_curve.h"
 #include "qwt/src/qwt_plot_grid.h"
@@ -51,7 +49,14 @@ class ConfigStabilizationWidget : public ConfigTaskWidget {
 public:
     ConfigStabilizationWidget(QWidget *parent = 0);
     ~ConfigStabilizationWidget();
+
     bool shouldObjectBeSaved(UAVObject *object);
+
+protected:
+    QString mapObjectName(const QString objectName);
+
+    virtual void refreshWidgetsValuesImpl(UAVObject *obj);
+    virtual void updateObjectsFromWidgetsImpl();
 
 private:
     Ui_StabilizationWidget *ui;
@@ -65,7 +70,6 @@ private:
     static const int EXPO_CURVE_POINTS_COUNT = 100;
     constexpr static const double EXPO_CURVE_CONSTANT = 1.01395948;
 
-    int boardModel;
     int m_stabSettingsBankCount;
     int m_currentStabSettingsBank;
 
@@ -73,9 +77,8 @@ private:
     QwtPlotCurve m_expoPlotCurvePitch;
     QwtPlotCurve m_expoPlotCurveYaw;
     QwtPlotGrid m_plotGrid;
-    QSignalMapper m_stabSettingsCopyFromSignalMapper;
-    QSignalMapper m_stabSettingsCopyToSignalMapper;
-    QSignalMapper m_stabSettingsSwapSignalMapper;
+
+    QSignalMapper m_bankActionSignalMapper;
 
     UAVObject *getStabBankObject(int bank);
 
@@ -83,21 +86,17 @@ private:
     void updateObjectFromThrottleCurve();
     void setupExpoPlot();
     void setupStabBanksGUI();
-    void resetStabBank(int bank);
-    void restoreStabBank(int bank);
-
-protected:
-    QString mapObjectName(const QString objectName);
-
-protected slots:
-    void refreshWidgetsValues(UAVObject *o = NULL);
-    void updateObjectsFromWidgets();
+    void resetBank(int bank);
+    void restoreBank(int bank);
+    void copyBank(int fromBank, int toBank);
+    void swapBank(int fromBank, int toBank);
 
 private slots:
+    void enableControlsChanged(bool enable);
+
     void realtimeUpdatesSlot(bool value);
     void linkCheckBoxes(bool value);
     void processLinkedWidgets(QWidget *);
-    void onBoardConnected();
     void stabBankChanged(int index);
     void resetThrottleCurveToDefault();
     void throttleCurveUpdated();
@@ -106,15 +105,6 @@ private slots:
     void replotExpoPitch(int value);
     void replotExpoYaw(int value);
 
-    void restoreAllStabBanks();
-    void resetAllStabBanks();
-    void restoreCurrentAction();
-    void resetCurrentStabBank();
-    void copyCurrentStabBank();
-
-    void copyFromBankToBank(int fromBank, int toBank);
-    void copyFromBankToCurrent(int bank);
-    void copyToBankFromCurrent(int bank);
-    void swapBankAndCurrent(int bank);
+    void bankAction(const QString &mapping);
 };
 #endif // ConfigStabilizationWidget_H

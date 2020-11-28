@@ -63,9 +63,33 @@ struct pios_i2c_fault_history {
     uint8_t  state[I2C_LOG_DEPTH];
 };
 
+enum pios_i2c_error_count {
+    PIOS_I2C_BAD_EVENT_COUNTER,
+    PIOS_I2C_FSM_FAULT_COUNT,
+    PIOS_I2C_ERROR_INTERRUPT_COUNTER,
+    PIOS_I2C_NACK_COUNTER,
+    PIOS_I2C_TIMEOUT_COUNTER,
+
+    PIOS_I2C_ERROR_COUNT_NUMELEM,
+};
+
+enum pios_i2c_transfer_result {
+    PIOS_I2C_TRANSFER_OK           = 0,
+    PIOS_I2C_TRANSFER_BUSY         = -2,
+    PIOS_I2C_TRANSFER_BUS_ERROR    = -1,
+    PIOS_I2C_TRANSFER_NACK         = -3,
+    PIOS_I2C_TRANSFER_TIMEOUT      = -4,
+    PIOS_I2C_TRANSFER_UNSPECIFIED_ERROR = -5,
+    PIOS_I2C_TRANSFER_DEVICE_ERROR = -6,
+};
+
+typedef bool (*pios_i2c_callback)(enum pios_i2c_transfer_result result);
+
 /* Public Functions */
 extern int32_t PIOS_I2C_Transfer(uint32_t i2c_id, const struct pios_i2c_txn txn_list[], uint32_t num_txns);
-extern int32_t PIOS_I2C_Transfer_Callback(uint32_t i2c_id, const struct pios_i2c_txn txn_list[], uint32_t num_txns, void *callback);
+extern int32_t PIOS_I2C_Transfer_Callback(uint32_t i2c_id, const struct pios_i2c_txn txn_list[], uint32_t num_txns, pios_i2c_callback callback);
+extern int32_t PIOS_I2C_Transfer_CallbackFromISR(uint32_t i2c_id, const struct pios_i2c_txn txn_list[], uint32_t num_txns, pios_i2c_callback callback, bool *woken);
+
 extern void PIOS_I2C_EV_IRQ_Handler(uint32_t i2c_id);
 extern void PIOS_I2C_ER_IRQ_Handler(uint32_t i2c_id);
 extern void PIOS_I2C_IRQ_Handler(uint32_t i2c_id);

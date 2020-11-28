@@ -857,17 +857,17 @@ void PIOS_I2C_GetDiagnostics(struct pios_i2c_fault_history *data, uint8_t *count
 {
 #if defined(PIOS_I2C_DIAGNOSTICS)
     memcpy(data, &i2c_adapter_fault_history, sizeof(i2c_adapter_fault_history));
-    counts[0] = i2c_bad_event_counter;
-    counts[1] = i2c_fsm_fault_count;
-    counts[2] = i2c_error_interrupt_counter;
-    counts[3] = i2c_nack_counter;
-    counts[4] = i2c_timeout_counter;
+    counts[PIOS_I2C_BAD_EVENT_COUNTER] = i2c_bad_event_counter;
+    counts[PIOS_I2C_FSM_FAULT_COUNT]   = i2c_fsm_fault_count;
+    counts[PIOS_I2C_ERROR_INTERRUPT_COUNTER] = i2c_error_interrupt_counter;
+    counts[PIOS_I2C_NACK_COUNTER] = i2c_nack_counter;
+    counts[PIOS_I2C_TIMEOUT_COUNTER]   = i2c_timeout_counter;
 #else
     struct pios_i2c_fault_history i2c_adapter_fault_history;
-    i2c_adapter_fault_history.type = PIOS_I2C_ERROR_EVENT;
+    i2c_adapter_fault_history.type     = PIOS_I2C_ERROR_EVENT;
 
     memcpy(data, &i2c_adapter_fault_history, sizeof(i2c_adapter_fault_history));
-    counts[0] = counts[1] = counts[2] = 0;
+    memset(counts, 0, sizeof(*counts) * PIOS_I2C_ERROR_COUNT_NUMELEM);
 #endif
 }
 
@@ -980,7 +980,7 @@ int32_t PIOS_I2C_Transfer(uint32_t i2c_id, const struct pios_i2c_txn txn_list[],
     struct pios_i2c_adapter *i2c_adapter = (struct pios_i2c_adapter *)i2c_id;
 
     if (!PIOS_I2C_validate(i2c_adapter)) {
-        return -1;
+        return PIOS_I2C_TRANSFER_DEVICE_ERROR;
     }
 
     PIOS_DEBUG_Assert(txn_list);
@@ -993,9 +993,10 @@ int32_t PIOS_I2C_Transfer(uint32_t i2c_id, const struct pios_i2c_txn txn_list[],
     portTickType timeout;
     timeout = i2c_adapter->cfg->transfer_timeout_ms / portTICK_RATE_MS;
     if (xSemaphoreTake(i2c_adapter->sem_busy, timeout) == pdFALSE) {
-        return -2;
+        return PIOS_I2C_TRANSFER_BUSY;
     }
 #else
+#error PIOS_I2C_Transfer is broken for use without FreeRTOS
     uint32_t timeout = 0xfff;
     while (i2c_adapter->busy && --timeout) {
         ;
@@ -1071,9 +1072,9 @@ int32_t PIOS_I2C_Transfer(uint32_t i2c_id, const struct pios_i2c_txn txn_list[],
     }
 #endif /* USE_FREERTOS */
 
-    return !semaphore_success ? -2 :
-           i2c_adapter->bus_error ? -1 :
-           0;
+    return !semaphore_success ? PIOS_I2C_TRANSFER_TIMEOUT :
+           i2c_adapter->bus_error ? PIOS_I2C_TRANSFER_BUS_ERROR :
+           PIOS_I2C_TRANSFER_OK;
 }
 
 

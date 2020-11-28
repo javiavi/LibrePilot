@@ -274,12 +274,12 @@ void go_txn_setup(struct pios_i2c_adapter *i2c_adapter)
 
     I2C_ITConfig(i2c_adapter->cfg->regs, I2C_IT_EVT | I2C_IT_BUF | I2C_IT_ERR, ENABLE);
     if (i2c_adapter->active_txn->rw == PIOS_I2C_TXN_READ) {
-        I2C_TransferHandling(i2c_adapter->cfg->regs, i2c_adapter->active_txn->addr, i2c_adapter->active_txn->len,
+        I2C_TransferHandling(i2c_adapter->cfg->regs, (i2c_adapter->active_txn->addr << 1), i2c_adapter->active_txn->len,
                              /* Only last transaction generates Auto End */
                              i2c_adapter->active_txn == i2c_adapter->last_txn ? I2C_AutoEnd_Mode : I2C_SoftEnd_Mode,
                              I2C_Generate_Start_Read);
     } else {
-        I2C_TransferHandling(i2c_adapter->cfg->regs, i2c_adapter->active_txn->addr, i2c_adapter->active_txn->len,
+        I2C_TransferHandling(i2c_adapter->cfg->regs, (i2c_adapter->active_txn->addr << 1), i2c_adapter->active_txn->len,
                              /* Only last transaction generates Auto End */
                              i2c_adapter->active_txn == i2c_adapter->last_txn ? I2C_AutoEnd_Mode : I2C_SoftEnd_Mode,
                              I2C_Generate_Start_Write);
@@ -458,17 +458,17 @@ void PIOS_I2C_GetDiagnostics(struct pios_i2c_fault_history *data, uint8_t *count
 {
 #if defined(PIOS_I2C_DIAGNOSTICS)
     memcpy(data, &i2c_adapter_fault_history, sizeof(i2c_adapter_fault_history));
-    counts[0] = i2c_bad_event_counter;
-    counts[1] = i2c_fsm_fault_count;
-    counts[2] = i2c_error_interrupt_counter;
-    counts[3] = i2c_nack_counter;
-    counts[4] = i2c_timeout_counter;
+    counts[PIOS_I2C_BAD_EVENT_COUNTER] = i2c_bad_event_counter;
+    counts[PIOS_I2C_FSM_FAULT_COUNT]   = i2c_fsm_fault_count;
+    counts[PIOS_I2C_ERROR_INTERRUPT_COUNTER] = i2c_error_interrupt_counter;
+    counts[PIOS_I2C_NACK_COUNTER] = i2c_nack_counter;
+    counts[PIOS_I2C_TIMEOUT_COUNTER]   = i2c_timeout_counter;
 #else
     struct pios_i2c_fault_history i2c_adapter_fault_history;
-    i2c_adapter_fault_history.type = PIOS_I2C_ERROR_EVENT;
+    i2c_adapter_fault_history.type     = PIOS_I2C_ERROR_EVENT;
 
     memcpy(data, &i2c_adapter_fault_history, sizeof(i2c_adapter_fault_history));
-    counts[0] = counts[1] = counts[2] = 0;
+    memset(counts, 0, sizeof(*counts) * PIOS_I2C_ERROR_COUNT_NUMELEM);
 #endif
 }
 
@@ -541,13 +541,9 @@ int32_t PIOS_I2C_Init(uint32_t *i2c_id, const struct pios_i2c_adapter_cfg *cfg)
     /* Enable the associated peripheral clock */
     switch ((uint32_t)i2c_adapter->cfg->regs) {
     case (uint32_t)I2C1:
-        /* Enable I2C peripheral clock (APB1 == slow speed) */
-        RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1, ENABLE);
         RCC_I2CCLKConfig(RCC_I2C1CLK_HSI);
         break;
     case (uint32_t)I2C2:
-        /* Enable I2C peripheral clock (APB1 == slow speed) */
-        RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C2, ENABLE);
         break;
     }
 

@@ -4,16 +4,27 @@ DEFINES += CONFIG_LIBRARY
 
 QT += widgets svg opengl qml quick
 
+# silence eigen warnings
+#QMAKE_CXXFLAGS_WARN_ON += -Wno-deprecated-declarations
+win32 {
+    #QMAKE_CXXFLAGS_WARN_ON += -Wno-ignored-attributes
+}
+
 include(config_dependencies.pri)
 
-INCLUDEPATH += ../../libs/eigen
+MINGW_DIR = $$clean_path($$(MINGW_DIR))
+
+EIGEN_INCLUDE = ../../libs/eigen
+#EIGEN_INCLUDE = $$MINGW_DIR/include/eigen3
+message(Using eigen from here: $$EIGEN_INCLUDE)
+
+INCLUDEPATH += $$EIGEN_INCLUDE
 
 HEADERS += \
     configplugin.h \
     configgadgetwidget.h \
     configgadgetfactory.h \
     configgadget.h \
-    fancytabwidget.h \
     configinputwidget.h \
     configoutputwidget.h \
     configvehicletypewidget.h \
@@ -21,8 +32,7 @@ HEADERS += \
     configccattitudewidget.h \
     configstabilizationwidget.h \
     assertions.h \
-    defaultattitudewidget.h \
-    defaulthwsettingswidget.h \
+    defaultconfigwidget.h \
     channelform.h \
     inputchannelform.h \
     configcamerastabilizationwidget.h \
@@ -39,6 +49,10 @@ HEADERS += \
     mixercurve.h \
     dblspindelegate.h \
     configrevohwwidget.h \
+    configspracingf3evohwwidget.h \
+    configtinyfishhwwidget.h \
+    configpikoblxhwwidget.h \
+    commonhwsettingswidget.h \
     calibration/calibrationutils.h \
     calibration/wizardstate.h \
     calibration/wizardmodel.h \
@@ -53,6 +67,7 @@ HEADERS += \
     calibration/levelcalibrationmodel.h \
     calibration/gyrobiascalibrationmodel.h \
     calibration/calibrationuiutils.h \
+    configautotunewidget.h \
     configoplinkwidget.h \
     configrevonanohwwidget.h \
     configsparky2hwwidget.h \
@@ -63,15 +78,13 @@ SOURCES += \
     configgadgetwidget.cpp \
     configgadgetfactory.cpp \
     configgadget.cpp \
-    fancytabwidget.cpp \
     configinputwidget.cpp \
     configoutputwidget.cpp \
     configvehicletypewidget.cpp \
     config_cc_hw_widget.cpp \
     configccattitudewidget.cpp \
     configstabilizationwidget.cpp \
-    defaultattitudewidget.cpp \
-    defaulthwsettingswidget.cpp \
+    defaultconfigwidget.cpp \
     channelform.cpp \
     inputchannelform.cpp \
     configcamerastabilizationwidget.cpp \
@@ -87,6 +100,10 @@ SOURCES += \
     mixercurve.cpp \
     dblspindelegate.cpp \
     configrevohwwidget.cpp \
+    configspracingf3evohwwidget.cpp \
+    configtinyfishhwwidget.cpp \
+    configpikoblxhwwidget.cpp \
+    commonhwsettingswidget.cpp \
     calibration/calibrationutils.cpp \
     calibration/wizardstate.cpp \
     calibration/wizardmodel.cpp \
@@ -96,6 +113,7 @@ SOURCES += \
     calibration/sixpointcalibrationmodel.cpp \
     calibration/levelcalibrationmodel.cpp \
     calibration/gyrobiascalibrationmodel.cpp \
+    configautotunewidget.cpp \
     configoplinkwidget.cpp \
     configrevonanohwwidget.cpp \
     configsparky2hwwidget.cpp \
@@ -114,8 +132,7 @@ FORMS += \
     input_wizard.ui \
     output.ui \
     ccattitude.ui \
-    defaultattitude.ui \
-    defaulthwsettings.ui \
+    defaultconfig.ui \
     inputchannelform.ui \
     camerastabilization.ui \
     outputchannelform.ui \
@@ -123,6 +140,11 @@ FORMS += \
     txpid.ui \
     mixercurve.ui \
     configrevohwwidget.ui \
+    autotune.ui \
+    configspracingf3evohwwidget.ui \
+    configtinyfishhwwidget.ui \
+    configpikoblxhwwidget.ui \
+    commonhwsettingswidget.ui \
     oplink.ui \
     configrevonanohwwidget.ui \
     configsparky2hwwidget.ui \

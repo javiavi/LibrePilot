@@ -59,7 +59,9 @@ UAVTalk::UAVTalk(QIODevice *iodev, UAVObjectManager *objMngr) : io(iodev), objMn
     ExtensionSystem::PluginManager *pm = ExtensionSystem::PluginManager::instance();
     Core::Internal::GeneralSettings *settings = pm->getObject<Core::Internal::GeneralSettings>();
     useUDPMirror = settings->useUDPMirror();
-    qDebug() << "USE UDP:::::::::::." << useUDPMirror;
+    if (useUDPMirror) {
+        qDebug() << "UAVTalk::UAVTalk -*** UDP mirror is enabled ***";
+    }
     if (useUDPMirror) {
         udpSocketTx = new QUdpSocket(this);
         udpSocketRx = new QUdpSocket(this);
@@ -363,7 +365,7 @@ bool UAVTalk::processInputByte(quint8 rxbyte)
         {
             UAVObject *rxObj = objMngr->getObject(rxObjId);
             if (rxObj == NULL && rxType != TYPE_OBJ_REQ) {
-                qWarning() << "UAVTalk - error : unknown object" << rxObjId;
+                qWarning().noquote() << "UAVTalk - error : unknown object" << QString::number(rxObjId, 16).toUpper();
                 stats.rxErrors++;
                 rxState = STATE_ERROR;
                 break;
@@ -383,7 +385,7 @@ bool UAVTalk::processInputByte(quint8 rxbyte)
             // Check length and determine next state
             if (rxLength >= MAX_PAYLOAD_LENGTH) {
                 // packet error - exceeded payload max length
-                qWarning() << "UAVTalk - error : exceeded payload max length" << rxObjId;
+                qWarning().noquote() << "UAVTalk - error : exceeded payload max length" << QString::number(rxObjId, 16).toUpper();
                 stats.rxErrors++;
                 rxState = STATE_ERROR;
                 break;
@@ -392,7 +394,7 @@ bool UAVTalk::processInputByte(quint8 rxbyte)
             // Check the lengths match
             if ((rxPacketLength + rxLength) != packetSize) {
                 // packet error - mismatched packet size
-                qWarning() << "UAVTalk - error : mismatched packet size" << rxObjId;
+                qWarning().noquote() << "UAVTalk - error : mismatched packet size" << QString::number(rxObjId, 16).toUpper();
                 stats.rxErrors++;
                 rxState = STATE_ERROR;
                 break;
@@ -428,7 +430,7 @@ bool UAVTalk::processInputByte(quint8 rxbyte)
 
         if (rxCS != rxCSPacket) {
             // packet error - faulty CRC
-            qWarning() << "UAVTalk - error : failed CRC check" << rxObjId;
+            qWarning().noquote() << "UAVTalk - error : failed CRC check" << QString::number(rxObjId, 16).toUpper();
             stats.rxCrcErrors++;
             rxState = STATE_ERROR;
             break;
@@ -436,7 +438,7 @@ bool UAVTalk::processInputByte(quint8 rxbyte)
 
         if (rxPacketLength != packetSize + CHECKSUM_LENGTH) {
             // packet error - mismatched packet size
-            qWarning() << "UAVTalk - error : mismatched packet size" << rxObjId;
+            qWarning().noquote() << "UAVTalk - error : mismatched packet size" << QString::number(rxObjId, 16).toUpper();
             stats.rxErrors++;
             rxState = STATE_ERROR;
             break;

@@ -46,20 +46,21 @@ public:
     virtual ~PfdQmlGadgetWidget();
 
     void loadConfiguration(PfdQmlGadgetConfiguration *config);
-    void saveState(QSettings *);
-    void restoreState(QSettings *);
+    void saveState(QSettings &) const;
+    void restoreState(QSettings &);
 
 private:
-    void setQmlFile(QString);
-
-    void setSource(const QUrl &url);
-    QQmlEngine *engine() const;
-    QList<QQmlError> errors() const;
-
     QuickWidgetProxy *m_quickWidgetProxy;
 
     PfdQmlContext *m_pfdQmlContext;
     QString m_qmlFileName;
+
+    void setQmlFile(QString);
+    void clear();
+
+    void setSource(const QUrl &url);
+    QQmlEngine *engine() const;
+    QList<QQmlError> errors() const;
 };
 
 #endif /* PFDQMLGADGETWIDGET_H_ */
